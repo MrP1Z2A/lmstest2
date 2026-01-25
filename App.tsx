@@ -92,6 +92,14 @@ const App: React.FC = () => {
       return { exams, assignments };
     };
 
+    const goToPrevMonth = () => {
+      setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+    };
+
+    const goToNextMonth = () => {
+      setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+    };
+
     return (
       <div className="space-y-8 animate-fadeIn text-slate-100 pb-20">
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-[#1f4e4a] pb-8">
@@ -100,11 +108,17 @@ const App: React.FC = () => {
             <p className="text-[#4ea59d]/60 font-black text-[10px] uppercase tracking-[0.4em]">Campus Calendar & Deadlines</p>
           </div>
           <div className="flex items-center gap-4 bg-[#0f2624] p-2 rounded-[24px] border border-[#1f4e4a]">
-            <button className="w-10 h-10 rounded-xl hover:bg-[#1f4e4a] transition-all flex items-center justify-center">
+            <button 
+              onClick={goToPrevMonth}
+              className="w-10 h-10 rounded-xl hover:bg-[#1f4e4a] transition-all flex items-center justify-center"
+            >
               <i className="fa-solid fa-chevron-left text-xs"></i>
             </button>
             <span className="text-xs font-black uppercase tracking-widest px-4">{monthName} {year}</span>
-            <button className="w-10 h-10 rounded-xl hover:bg-[#1f4e4a] transition-all flex items-center justify-center">
+            <button 
+              onClick={goToNextMonth}
+              className="w-10 h-10 rounded-xl hover:bg-[#1f4e4a] transition-all flex items-center justify-center"
+            >
               <i className="fa-solid fa-chevron-right text-xs"></i>
             </button>
           </div>
@@ -123,7 +137,7 @@ const App: React.FC = () => {
                 {calendarGrid.map((day, idx) => {
                   if (day === null) return <div key={`empty-${idx}`} className="h-32 border-b border-r border-[#1f4e4a] bg-[#0a1a19]/30"></div>;
                   const { exams, assignments } = getEventsForDay(day);
-                  const isToday = day === 26; // Mock "today"
+                  const isToday = day === 26 && calendarDate.getMonth() === 3 && calendarDate.getFullYear() === 2025; // Mock "today"
                   
                   return (
                     <div key={day} className={`h-32 border-b border-r border-[#1f4e4a] p-3 transition-colors hover:bg-[#4ea59d]/5 relative group cursor-pointer ${isToday ? 'bg-[#4ea59d]/5' : ''}`}>
@@ -523,6 +537,7 @@ const App: React.FC = () => {
         <section className="lg:col-span-2 bg-[#0f2624] p-10 rounded-[40px] border border-[#1f4e4a] shadow-xl">
           <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8">Achievements & Badges</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+             {/* Fix typo: STUDENT_ACHIECHEVEMENTS to STUDENT_ACHIEVEMENTS */}
              {STUDENT_ACHIEVEMENTS.map(ach => (
                <div key={ach.id} className="p-8 bg-[#0a1a19] rounded-[40px] border border-[#1f4e4a] text-center space-y-4 group hover:bg-[#4ea59d]/5 transition-all">
                   <div className={`w-20 h-20 mx-auto rounded-[28px] bg-white/5 flex items-center justify-center text-4xl ${ach.color} group-hover:scale-110 transition-transform`}>
@@ -784,7 +799,7 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
-      <main className="flex-1 md:ml-72 p-8 overflow-x-hidden">
+      <main className={`flex-1 md:ml-72 p-6 md:p-8 overflow-x-hidden ${isSidebarOpen ? 'hidden md:block' : 'block'}`}>
         {currentView === 'dashboard' && renderDashboard()}
         {currentView === 'instruction' && renderInstruction()}
         {currentView === 'activity' && renderActivity()}
@@ -796,23 +811,23 @@ const App: React.FC = () => {
         {currentView === 'timetable' && renderTimetable()}
         {currentView === 'profile' && (
            <div className="space-y-8 animate-fadeIn text-slate-100">
-             <h2 className="text-3xl font-black text-white uppercase tracking-tight">Student Profile</h2>
-             <div className="bg-[#0f2624] p-10 rounded-[40px] border border-[#1f4e4a] max-w-2xl shadow-2xl relative overflow-hidden">
-                 <div className="flex flex-col md:flex-row gap-10 items-start md:items-center relative z-10">
-                     <img src={user.avatar} className="w-40 h-40 rounded-[40px] border-4 border-[#4ea59d] p-1.5 shadow-2xl object-cover" />
-                     <div className="flex-1 space-y-6">
+             <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Student Profile</h2>
+             <div className="bg-[#0f2624] p-6 md:p-10 rounded-[32px] md:rounded-[40px] border border-[#1f4e4a] max-w-2xl shadow-2xl relative overflow-hidden">
+                 <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center relative z-10">
+                     <img src={user.avatar} className="w-32 h-32 md:w-40 md:h-40 rounded-[24px] md:rounded-[40px] border-4 border-[#4ea59d] p-1 shadow-2xl object-cover" />
+                     <div className="flex-1 space-y-4 text-center sm:text-left">
                          <div>
-                             <p className="text-[10px] font-black text-[#4ea59d] uppercase tracking-[0.3em] mb-1">Full Name</p>
-                             <h3 className="text-3xl font-black text-white">{user.name}</h3>
+                             <p className="text-[9px] font-black text-[#4ea59d] uppercase mb-1">Full Name</p>
+                             <h3 className="text-2xl md:text-3xl font-black text-white">{user.name}</h3>
                          </div>
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6 border-t border-[#1f4e4a]">
+                         <div className="grid grid-cols-1 gap-4 pt-4 border-t border-[#1f4e4a]">
                              <div>
-                                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Email Address</p>
-                                 <p className="text-sm font-bold text-slate-200">{user.email}</p>
+                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Email Address</p>
+                                 <p className="text-xs font-bold text-slate-200">{user.email}</p>
                              </div>
                              <div>
-                                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Student ID</p>
-                                 <p className="text-sm font-mono font-bold text-[#4ea59d]">{user.studentId || 'N/A'}</p>
+                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Student ID</p>
+                                 <p className="text-xs font-mono font-bold text-[#4ea59d]">{user.studentId || 'N/A'}</p>
                              </div>
                          </div>
                      </div>
