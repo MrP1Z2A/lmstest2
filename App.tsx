@@ -6,7 +6,7 @@ import Login from './components/Login';
 import { Course, User, UserRole, View, Note, QuizQuestion, Quiz, AppEvent, EventType } from './types';
 import { INITIAL_USER, INITIAL_COURSES, FREELANCE_TEACHERS, MOCK_ASSIGNMENTS, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS } from './constants';
 import { summarizeNotes, generateQuizFromNotes } from './services/geminiService';
-
+{/*Test*/}
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<User>(INITIAL_USER);
