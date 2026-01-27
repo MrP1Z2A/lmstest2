@@ -26,7 +26,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleSignIn = () => {
     setError('');
-    if (username === 'user1' && password === '123456') {
+    if (username === 'parent@gmail.com' && password === 'EDU-2026-001') {
+      window.location.href = 'https://smspa1.vercel.app';
+    } else if (username === 'user1' && password === '123456') {
       onLogin(UserRole.STUDENT, 'alex@edu.com');
     } else if (username === 'teacher1' && password === '123456') {
       onLogin(UserRole.TEACHER, 'sarah@edu.com');
