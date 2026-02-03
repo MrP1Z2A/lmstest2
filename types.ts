@@ -1,42 +1,103 @@
 
-import { ANNOUNCEMENTS, UPCOMING_EXAMS, MOCK_ASSIGNMENTS } from './constants';
-import { ReportCard } from './types';
+export enum UserRole {
+  STUDENT = 'STUDENT',
+  TEACHER = 'TEACHER',
+  ADMIN = 'ADMIN',
+  PARENT = 'PARENT'
+}
 
-/**
- * Service to bridge data between the SMS (School Management System) 
- * and this LMS (Learning Management System).
- */
-export const syncSmsData = async (studentId?: string) => {
-  try {
-    // In production, fetch specific student data:
-    const response = await fetch(`https://smspa1.vercel.app/api/v1/sync?sid=${studentId}`);
-    
-    await new Promise(resolve => setTimeout(resolve, 800));
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatar: string;
+  studentId?: string;
+  childId?: string; // Linked student for Parent role
+  eduLevel?: string;
+  bio?: string;
+  specialization?: string[];
+  rating?: number;
+}
 
-    // Simulated Report Card Data from SMS
-    const reportCard: ReportCard = {
-      term: "Spring 2025",
-      gpa: "3.85",
-      rank: "5th / 120",
-      attendance: "96%",
-      subjects: [
-        { name: "Modern Physics", grade: "A", score: 92, comment: "Exceptional analytical skills." },
-        { name: "Data Structures", grade: "B+", score: 88, comment: "Strong logic, needs more practice in recursion." },
-        { name: "Discrete Math", grade: "A-", score: 90, comment: "Active participation in seminars." }
-      ]
-    };
+export interface ReportCard {
+  term: string;
+  gpa: string;
+  rank: string;
+  attendance: string;
+  subjects: {
+    name: string;
+    grade: string;
+    score: number;
+    comment: string;
+  }[];
+}
 
-    return {
-      announcements: [...ANNOUNCEMENTS],
-      exams: [...UPCOMING_EXAMS],
-      assignments: [...MOCK_ASSIGNMENTS],
-      reportCard,
-      lastSync: new Date().toLocaleTimeString()
-    };
-  } catch (error) {
-    console.error("SMS Sync Failed:", error);
-    throw error;
-  }
-};
-export { ReportCard };
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  summary?: string;
+  ebookUrl?: string;
+  createdAt: string;
+}
 
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+export interface Quiz {
+  id: string;
+  title: string;
+  questions: QuizQuestion[];
+  courseId: string;
+}
+
+export enum EventType {
+  CLASS = 'CLASS',
+  EXAM = 'EXAM',
+  HOLIDAY = 'HOLIDAY',
+  REMINDER = 'REMINDER'
+}
+
+export interface AppEvent {
+  id: string;
+  title: string;
+  time: string;
+  location: string;
+  type: EventType;
+  description?: string;
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description: string;
+  moduleIntro: string;
+  topics: string[];
+  teacherId: string;
+  subTeacherName?: string;
+  onlineClassUrl?: string;
+  scheduleDescription?: string;
+  thumbnail: string;
+  category: string;
+  notes: Note[];
+  quizzes: Quiz[];
+}
+
+export type View = 
+  | 'dashboard' 
+  | 'courses' 
+  | 'marketplace' 
+  | 'course-detail' 
+  | 'quiz-player' 
+  | 'teacher-panel'
+  | 'profile'
+  | 'instruction'
+  | 'activity'
+  | 'timetable'
+  | 'studies'
+  | 'contact'
+  | 'parent-portal';

@@ -1,12 +1,13 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import CourseCard from './components/CourseCard';
 import Login from './components/Login';
-import { Course, User, UserRole, View, Note, QuizQuestion, Quiz, AppEvent, EventType } from './types';
-import { INITIAL_USER, INITIAL_COURSES, FREELANCE_TEACHERS, MOCK_ASSIGNMENTS, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS } from './constants';
+import { Course, User, UserRole, View, Note, Quiz, ReportCard } from './types';
+import { INITIAL_USER, INITIAL_COURSES, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS, MOCK_ASSIGNMENTS } from './constants';
 import { summarizeNotes, generateQuizFromNotes } from './services/geminiService';
-{/*Test*/}
+import { syncSmsData } from './services/smsService';
+
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<User>(INITIAL_USER);
@@ -16,12 +17,51 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [calendarDate, setCalendarDate] = useState(new Date(2025, 3, 1)); // April 2025 based on mock data
+  const [calendarDate, setCalendarDate] = useState(new Date(2025, 3, 1));
+  const [calendarSubView, setCalendarSubView] = useState<'day' | 'week' | 'month'>('month');
+  
+  // Dynamic Data States (Linked to SMS)
+  const [dynamicAnnouncements, setDynamicAnnouncements] = useState(ANNOUNCEMENTS);
+  const [dynamicExams, setDynamicExams] = useState(UPCOMING_EXAMS);
+  const [dynamicAssignments, setDynamicAssignments] = useState(MOCK_ASSIGNMENTS);
+  const [reportCard, setReportCard] = useState<ReportCard | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  const performSmsSync = async () => {
+    setIsLoading(true);
+    try {
+      const data = await syncSmsData(user.studentId || user.childId);
+      setDynamicAnnouncements(data.announcements);
+      setDynamicExams(data.exams);
+      setDynamicAssignments(data.assignments);
+      setReportCard(data.reportCard);
+      setLastSyncTime(data.lastSync);
+    } catch (err) {
+      console.error("Sync error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      performSmsSync();
+      if (user.role === UserRole.PARENT) {
+        setCurrentView('parent-portal');
+      }
+    }
+  }, [isLoggedIn, user.role]);
 
   const handleLogin = (role: UserRole, email: string) => {
-    setUser({ ...INITIAL_USER, role, email });
+    const newUser = { 
+      ...INITIAL_USER, 
+      role, 
+      email,
+      name: role === UserRole.PARENT ? 'Mrs. Johnson' : INITIAL_USER.name,
+      childId: role === UserRole.PARENT ? 'EDU-2025-001' : undefined
+    };
+    setUser(newUser);
     setIsLoggedIn(true);
-    setCurrentView('dashboard');
   };
 
   const handleLogout = () => {
@@ -73,141 +113,335 @@ const App: React.FC = () => {
     setIsLoading(false);
   };
 
+  const renderParentPortal = () => {
+    if (!reportCard) return null;
+    return (
+      <div className="space-y-12 animate-fadeIn text-slate-100 pb-20">
+        <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-[#1f4e4a] pb-8">
+          <div className="space-y-2">
+            <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Parental Oversight</h2>
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 rounded-full bg-[#4ea59d]/20 flex items-center justify-center text-[#4ea59d]">
+                 <i className="fa-solid fa-child-reaching"></i>
+               </div>
+               <div>
+                  <p className="text-[#4ea59d] font-black text-[10px] uppercase tracking-[0.2em]">Student Record: Alex Johnson</p>
+                  <p className="text-slate-500 text-[9px] font-bold uppercase tracking-widest">{reportCard.term} Academic Session</p>
+               </div>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <button className="px-6 py-3 bg-[#4ea59d]/10 border border-[#4ea59d]/30 text-[#4ea59d] rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4ea59d] hover:text-white transition-all">
+              <i className="fa-solid fa-file-pdf mr-2"></i> Download Full Report
+            </button>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-[#0f2624] p-8 rounded-[32px] border border-[#1f4e4a] text-center">
+            <p className="text-[10px] font-black text-[#4ea59d] uppercase tracking-widest mb-2">Current GPA</p>
+            <p className="text-4xl font-black text-white">{reportCard.gpa}</p>
+          </div>
+          <div className="bg-[#0f2624] p-8 rounded-[32px] border border-[#1f4e4a] text-center">
+            <p className="text-[10px] font-black text-[#4ea59d] uppercase tracking-widest mb-2">Class Rank</p>
+            <p className="text-4xl font-black text-white">{reportCard.rank}</p>
+          </div>
+          <div className="bg-[#0f2624] p-8 rounded-[32px] border border-[#1f4e4a] text-center">
+            <p className="text-[10px] font-black text-[#4ea59d] uppercase tracking-widest mb-2">Attendance</p>
+            <p className="text-4xl font-black text-white">{reportCard.attendance}</p>
+          </div>
+          <div className="bg-[#4ea59d] p-8 rounded-[32px] text-center shadow-xl shadow-[#4ea59d]/20">
+            <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-2">Standing</p>
+            <p className="text-4xl font-black text-white italic uppercase">Elite</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
+          <div className="xl:col-span-2 bg-[#0f2624] rounded-[40px] border border-[#1f4e4a] overflow-hidden shadow-2xl">
+             <div className="p-8 border-b border-[#1f4e4a] bg-[#0a1a19]">
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Academic Performance breakdown</h3>
+             </div>
+             <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                   <thead className="bg-[#0a1a19]/50">
+                      <tr>
+                         <th className="px-8 py-5 text-[10px] font-black text-[#4ea59d] uppercase tracking-widest">Subject</th>
+                         <th className="px-8 py-5 text-[10px] font-black text-[#4ea59d] uppercase tracking-widest">Grade</th>
+                         <th className="px-8 py-5 text-[10px] font-black text-[#4ea59d] uppercase tracking-widest">Faculty Feedback</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-[#1f4e4a]">
+                      {reportCard.subjects.map((sub, i) => (
+                         <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="px-8 py-6">
+                               <p className="font-bold text-white text-sm">{sub.name}</p>
+                               <div className="w-32 h-1 bg-[#1f4e4a] rounded-full mt-2 overflow-hidden">
+                                  <div className="h-full bg-[#4ea59d]" style={{ width: `${sub.score}%` }}></div>
+                               </div>
+                            </td>
+                            <td className="px-8 py-6">
+                               <span className="text-xl font-black text-[#4ea59d]">{sub.grade}</span>
+                               <span className="ml-2 text-[9px] text-slate-500 font-bold uppercase">{sub.score}%</span>
+                            </td>
+                            <td className="px-8 py-6 text-xs text-slate-400 font-medium leading-relaxed italic max-w-sm">
+                               "{sub.comment}"
+                            </td>
+                         </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+
+          <div className="space-y-8">
+             <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight mb-8 flex items-center gap-3">
+                   <i className="fa-solid fa-wand-magic-sparkles text-[#4ea59d]"></i> AI Insight for Parents
+                </h3>
+                <div className="p-6 bg-[#4ea59d]/5 rounded-[32px] border border-[#4ea59d]/20 italic">
+                   <p className="text-xs text-slate-300 leading-relaxed">
+                      "Alex is demonstrating exceptional mastery in <strong>theoretical sciences</strong>. While their Data Structures performance is strong (88%), our AI analysis suggests focusing on <strong>recursion logic</strong> to reach the top percentile. Overall performance is in the <strong>top 4%</strong> of the cohort."
+                   </p>
+                </div>
+             </section>
+
+             <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight mb-8">Contact Faculty</h3>
+                <div className="space-y-4">
+                   <button className="w-full py-4 bg-[#0a1a19] border border-[#1f4e4a] rounded-2xl flex items-center gap-4 px-6 group hover:border-[#4ea59d] transition-all">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center text-xs">
+                         <i className="fa-solid fa-message"></i>
+                      </div>
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Message Head Teacher</span>
+                   </button>
+                   <button className="w-full py-4 bg-[#0a1a19] border border-[#1f4e4a] rounded-2xl flex items-center gap-4 px-6 group hover:border-[#4ea59d] transition-all">
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center text-xs">
+                         <i className="fa-solid fa-video"></i>
+                      </div>
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Schedule PTM Meeting</span>
+                   </button>
+                </div>
+             </section>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderTimetable = () => {
-    const daysInMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).getDate();
-    const firstDayOfMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1).getDay();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const monthName = calendarDate.toLocaleString('default', { month: 'long' });
     const year = calendarDate.getFullYear();
 
-    const calendarGrid = [];
-    // Padding for first day
-    for (let i = 0; i < firstDayOfMonth; i++) calendarGrid.push(null);
-    // Real days
-    for (let i = 1; i <= daysInMonth; i++) calendarGrid.push(i);
-
-    const getEventsForDay = (day: number) => {
-      const dateStr = `${monthName} ${day < 10 ? '0' + day : day}`;
-      const exams = UPCOMING_EXAMS.filter(ex => ex.date.includes(dateStr));
-      const assignments = MOCK_ASSIGNMENTS.filter(ass => ass.dueDate.includes(dateStr));
-      return { exams, assignments };
+    const getEventsForDate = (date: Date) => {
+      const d = date.getDate();
+      const m = date.toLocaleString('default', { month: 'long' });
+      const dateStr = `${m} ${d < 10 ? '0' + d : d}`;
+      return {
+        exams: dynamicExams.filter(ex => ex.date.includes(dateStr)),
+        assignments: dynamicAssignments.filter(ass => ass.dueDate.includes(dateStr))
+      };
     };
 
-    const goToPrevMonth = () => {
-      setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+    const handlePrev = () => {
+      const d = new Date(calendarDate);
+      if (calendarSubView === 'month') d.setMonth(d.getMonth() - 1);
+      else if (calendarSubView === 'week') d.setDate(d.getDate() - 7);
+      else d.setDate(d.getDate() - 1);
+      setCalendarDate(d);
     };
 
-    const goToNextMonth = () => {
-      setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+    const handleNext = () => {
+      const d = new Date(calendarDate);
+      if (calendarSubView === 'month') d.setMonth(d.getMonth() + 1);
+      else if (calendarSubView === 'week') d.setDate(d.getDate() + 7);
+      else d.setDate(d.getDate() + 1);
+      setCalendarDate(d);
+    };
+
+    const renderMonthGrid = () => {
+      const daysInMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).getDate();
+      const firstDay = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1).getDay();
+      const grid = [];
+      for (let i = 0; i < firstDay; i++) grid.push(null);
+      for (let i = 1; i <= daysInMonth; i++) grid.push(new Date(calendarDate.getFullYear(), calendarDate.getMonth(), i));
+
+      return (
+        <div className="bg-[#0f2624] rounded-[32px] border border-[#1f4e4a] overflow-hidden shadow-2xl min-w-[700px]">
+          <div className="grid grid-cols-7 border-b border-[#1f4e4a] bg-[#0a1a19]">
+            {days.map(day => <div key={day} className="py-4 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">{day}</div>)}
+          </div>
+          <div className="grid grid-cols-7">
+            {grid.map((date, idx) => {
+              if (!date) return <div key={`empty-${idx}`} className="h-32 border-b border-r border-[#1f4e4a] bg-[#0a1a19]/30"></div>;
+              const { exams, assignments } = getEventsForDate(date);
+              const isToday = date.getDate() === 26 && date.getMonth() === 3;
+              return (
+                <div key={idx} className={`h-32 border-b border-r border-[#1f4e4a] p-3 transition-colors hover:bg-[#4ea59d]/5 relative group ${isToday ? 'bg-[#4ea59d]/5' : ''}`}>
+                  <span className={`text-[10px] font-black ${isToday ? 'bg-[#4ea59d] text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-slate-400'}`}>{date.getDate()}</span>
+                  <div className="mt-2 space-y-1">
+                    {exams.map((ex, i) => <div key={i} className="px-1.5 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded text-[8px] font-black text-orange-500 truncate uppercase">{ex.subject}</div>)}
+                    {assignments.map((as, i) => <div key={i} className="px-1.5 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded text-[8px] font-black text-purple-500 truncate uppercase">{as.title}</div>)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    const renderWeekGrid = () => {
+      const startOfWeek = new Date(calendarDate);
+      startOfWeek.setDate(calendarDate.getDate() - calendarDate.getDay());
+      const weekDates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        return d;
+      });
+      const hours = Array.from({ length: 13 }, (_, i) => i + 8);
+
+      return (
+        <div className="bg-[#0f2624] rounded-[32px] border border-[#1f4e4a] overflow-hidden shadow-2xl min-w-[800px]">
+          <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-[#1f4e4a] bg-[#0a1a19]">
+            <div className="p-4"></div>
+            {weekDates.map((date, i) => (
+              <div key={i} className="py-4 text-center border-l border-[#1f4e4a]">
+                <div className="text-[10px] font-black uppercase text-slate-500">{days[i]}</div>
+                <div className="text-sm font-black text-white">{date.getDate()}</div>
+              </div>
+            ))}
+          </div>
+          <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
+            {hours.map(hour => (
+              <div key={hour} className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-[#1f4e4a]/50">
+                <div className="p-4 text-[10px] font-black text-slate-500 text-right uppercase">{hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}</div>
+                {weekDates.map((date, i) => {
+                  const { exams } = getEventsForDate(date);
+                  const isToday = date.getDate() === 26 && date.getMonth() === 3;
+                  return (
+                    <div key={i} className={`h-20 border-l border-[#1f4e4a] p-1 relative ${isToday ? 'bg-[#4ea59d]/5' : ''}`}>
+                      {hour === 10 && exams.length > 0 && (
+                        <div className="absolute inset-x-1 top-1 bottom-1 bg-orange-500/20 border-l-4 border-orange-500 p-1 rounded overflow-hidden">
+                           <p className="text-[7px] font-black text-orange-500 uppercase leading-none">Exam</p>
+                           <p className="text-[9px] font-bold text-white truncate mt-1">{exams[0].subject}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const renderDayGrid = () => {
+      const hours = Array.from({ length: 15 }, (_, i) => i + 7);
+      const { exams, assignments } = getEventsForDate(calendarDate);
+      return (
+        <div className="bg-[#0f2624] rounded-[32px] border border-[#1f4e4a] overflow-hidden shadow-2xl max-w-3xl mx-auto">
+          <div className="p-6 bg-[#0a1a19] border-b border-[#1f4e4a] flex justify-between items-center">
+            <h3 className="text-xl font-black uppercase tracking-tighter text-white">{days[calendarDate.getDay()]}, {monthName} {calendarDate.getDate()}</h3>
+            <span className="text-[10px] font-black text-[#4ea59d] uppercase tracking-widest">Today's Focus</span>
+          </div>
+          <div className="p-6 space-y-6">
+            {hours.map(hour => {
+              const hasExam = hour === 10 && exams.length > 0;
+              const hasAssignment = hour === 18 && assignments.length > 0;
+              return (
+                <div key={hour} className="flex gap-6 group">
+                  <div className="w-16 text-right shrink-0 py-1 text-[10px] font-black text-slate-500 uppercase">{hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}</div>
+                  <div className="flex-1 min-h-[60px] border-l-2 border-[#1f4e4a] pl-6 relative pb-6">
+                    <div className="absolute -left-[5px] top-2 w-2 h-2 rounded-full bg-[#1f4e4a] group-hover:bg-[#4ea59d] transition-colors"></div>
+                    {hasExam && (
+                      <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-2xl animate-slideIn">
+                        <div className="flex justify-between items-start">
+                          <h4 className="text-sm font-black text-orange-500 uppercase">Exam: {exams[0].subject}</h4>
+                          <span className="text-[9px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded uppercase">High Priority</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1"><i className="fa-solid fa-location-dot mr-1"></i> {exams[0].venue}</p>
+                      </div>
+                    )}
+                    {hasAssignment && (
+                      <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-2xl animate-slideIn">
+                        <h4 className="text-sm font-black text-purple-500 uppercase">Assignment: {assignments[0].title}</h4>
+                        <p className="text-xs text-slate-400 mt-1"><i className="fa-solid fa-clock mr-1"></i> Submission Deadline</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
     };
 
     return (
       <div className="space-y-8 animate-fadeIn text-slate-100 pb-20">
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-[#1f4e4a] pb-8">
           <div className="space-y-2">
-            <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">Schedule Hub</h2>
-            <p className="text-[#4ea59d]/60 font-black text-[10px] uppercase tracking-[0.4em]">Campus Calendar & Deadlines</p>
+            <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter italic">Calendar Studio</h2>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#4ea59d] animate-pulse"></span>
+              <p className="text-[#4ea59d]/60 font-black text-[10px] uppercase tracking-[0.4em]">Interactive Campus Timeline</p>
+            </div>
           </div>
-          <div className="flex items-center gap-4 bg-[#0f2624] p-2 rounded-[24px] border border-[#1f4e4a]">
-            <button 
-              onClick={goToPrevMonth}
-              className="w-10 h-10 rounded-xl hover:bg-[#1f4e4a] transition-all flex items-center justify-center"
-            >
-              <i className="fa-solid fa-chevron-left text-xs"></i>
-            </button>
-            <span className="text-xs font-black uppercase tracking-widest px-4">{monthName} {year}</span>
-            <button 
-              onClick={goToNextMonth}
-              className="w-10 h-10 rounded-xl hover:bg-[#1f4e4a] transition-all flex items-center justify-center"
-            >
-              <i className="fa-solid fa-chevron-right text-xs"></i>
-            </button>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex bg-[#0f2624] p-1 rounded-2xl border border-[#1f4e4a]">
+              {(['day', 'week', 'month'] as const).map(v => (
+                <button 
+                  key={v} 
+                  onClick={() => setCalendarSubView(v)}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${calendarSubView === v ? 'bg-[#4ea59d] text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-4 bg-[#0f2624] p-2 rounded-2xl border border-[#1f4e4a]">
+              <button onClick={handlePrev} className="w-8 h-8 rounded-lg hover:bg-[#1f4e4a] flex items-center justify-center transition-all"><i className="fa-solid fa-chevron-left text-xs"></i></button>
+              <span className="text-xs font-black uppercase tracking-widest px-2">{calendarSubView === 'day' ? `${monthName} ${calendarDate.getDate()}` : `${monthName} ${year}`}</span>
+              <button onClick={handleNext} className="w-8 h-8 rounded-lg hover:bg-[#1f4e4a] flex items-center justify-center transition-all"><i className="fa-solid fa-chevron-right text-xs"></i></button>
+            </div>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-12">
-          {/* Calendar Grid */}
-          <div className="xl:col-span-3">
-            <div className="bg-[#0f2624] rounded-[40px] border border-[#1f4e4a] overflow-hidden shadow-2xl">
-              <div className="grid grid-cols-7 border-b border-[#1f4e4a] bg-[#0a1a19]">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="py-4 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">{day}</div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7">
-                {calendarGrid.map((day, idx) => {
-                  if (day === null) return <div key={`empty-${idx}`} className="h-32 border-b border-r border-[#1f4e4a] bg-[#0a1a19]/30"></div>;
-                  const { exams, assignments } = getEventsForDay(day);
-                  const isToday = day === 26 && calendarDate.getMonth() === 3 && calendarDate.getFullYear() === 2025; // Mock "today"
-                  
-                  return (
-                    <div key={day} className={`h-32 border-b border-r border-[#1f4e4a] p-3 transition-colors hover:bg-[#4ea59d]/5 relative group cursor-pointer ${isToday ? 'bg-[#4ea59d]/5' : ''}`}>
-                      <span className={`text-[10px] font-black ${isToday ? 'bg-[#4ea59d] text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-slate-400 group-hover:text-white'}`}>
-                        {day}
-                      </span>
-                      
-                      <div className="mt-2 space-y-1">
-                        {exams.map((ex, i) => (
-                          <div key={i} className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded-md text-[8px] font-black text-orange-500 truncate uppercase">
-                             <i className="fa-solid fa-file-signature mr-1"></i> {ex.subject}
-                          </div>
-                        ))}
-                        {assignments.map((ass, i) => (
-                          <div key={i} className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded-md text-[8px] font-black text-purple-500 truncate uppercase">
-                             <i className="fa-solid fa-clock mr-1"></i> {ass.title}
-                          </div>
-                        ))}
-                        {day % 2 === 0 && day < 20 && (
-                          <div className="px-2 py-0.5 bg-[#4ea59d]/10 border border-[#4ea59d]/20 rounded-md text-[8px] font-black text-[#4ea59d] truncate uppercase">
-                             <i className="fa-solid fa-chalkboard mr-1"></i> Physics Lec
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar Info */}
-          <div className="space-y-8">
-             <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
-               <h3 className="text-lg font-black text-white uppercase tracking-tight mb-8 flex items-center gap-3">
-                 <i className="fa-solid fa-hourglass-start text-[#4ea59d]"></i> Due Soon
-               </h3>
-               <div className="space-y-6">
-                 {MOCK_ASSIGNMENTS.filter(a => a.status === 'Pending').map((ass, i) => (
-                   <div key={i} className="p-5 bg-[#0a1a19] rounded-3xl border border-[#1f4e4a] group hover:border-[#4ea59d] transition-all">
-                      <p className="text-[9px] font-black text-[#4ea59d] uppercase mb-1">{ass.dueDate}</p>
-                      <h4 className="text-sm font-bold text-white group-hover:text-[#4ea59d] transition-colors">{ass.title}</h4>
-                      <p className="text-[8px] text-slate-500 font-black uppercase mt-2 tracking-widest">{ass.course}</p>
-                   </div>
-                 ))}
-               </div>
-             </section>
-
-             <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
-                <h3 className="text-lg font-black text-white uppercase tracking-tight mb-8">Weekly View</h3>
-                <div className="space-y-4">
-                  {[
-                    { day: 'Mon', time: '10:30 AM', task: 'Physics Lecture' },
-                    { day: 'Tue', time: '09:00 AM', task: 'CS Lab 4' },
-                    { day: 'Wed', time: '02:00 PM', task: 'Math Seminar' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-4 p-4 bg-[#0a1a19] rounded-2xl border border-[#1f4e4a]">
-                      <div className="w-10 h-10 rounded-xl bg-[#4ea59d]/10 text-[#4ea59d] flex flex-col items-center justify-center text-[10px] font-black">
-                         {item.day}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white">{item.task}</p>
-                        <p className="text-[9px] text-slate-600 font-black uppercase tracking-widest">{item.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-             </section>
-          </div>
+        <div className="overflow-x-auto pb-4 custom-scrollbar">
+          {calendarSubView === 'month' && renderMonthGrid()}
+          {calendarSubView === 'week' && renderWeekGrid()}
+          {calendarSubView === 'day' && renderDayGrid()}
         </div>
+
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-[#0f2624] p-8 rounded-[32px] border border-[#1f4e4a] shadow-xl md:col-span-2">
+             <h3 className="text-lg font-black text-white uppercase tracking-tight mb-8 flex items-center gap-4">
+               <i className="fa-solid fa-calendar-check text-[#4ea59d]"></i> Summary of Events
+             </h3>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {dynamicExams.map((ex, i) => (
+                  <div key={i} className="p-5 bg-[#0a1a19] rounded-3xl border border-[#1f4e4a] group hover:border-orange-500/50 transition-all">
+                     <div className="flex justify-between items-start mb-3">
+                       <span className="text-[8px] font-black px-2 py-1 bg-orange-500/10 text-orange-500 rounded uppercase tracking-widest">Exam</span>
+                       <span className="text-[9px] font-black text-slate-600 uppercase">{ex.date}</span>
+                     </div>
+                     <h4 className="text-sm font-bold text-white group-hover:text-orange-500 transition-colors">{ex.subject}</h4>
+                     <p className="text-[10px] text-slate-500 font-bold uppercase mt-2 italic"><i className="fa-solid fa-clock mr-1"></i> {ex.time}</p>
+                  </div>
+                ))}
+             </div>
+          </div>
+          <div className="bg-[#4ea59d]/5 border border-[#4ea59d]/20 p-8 rounded-[32px] flex flex-col items-center justify-center text-center space-y-4">
+             <div className="w-16 h-16 bg-[#4ea59d] rounded-full flex items-center justify-center text-white shadow-2xl shadow-[#4ea59d]/40">
+                <i className="fa-solid fa-plus text-2xl"></i>
+             </div>
+             <h4 className="text-lg font-black text-white uppercase tracking-tight">Sync Schedules</h4>
+             <p className="text-xs text-[#4ea59d] font-bold leading-relaxed">Connect your external calendar to auto-import course modules and assignment deadlines.</p>
+             <button className="w-full py-4 bg-[#4ea59d] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl">Link Account</button>
+          </div>
+        </section>
       </div>
     );
   };
@@ -218,6 +452,20 @@ const App: React.FC = () => {
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-tight italic">Dashboard Central</h2>
           <p className="text-[#4ea59d]/60 text-[10px] font-black uppercase tracking-[0.4em]">Academic Overview</p>
+        </div>
+        <div className="flex items-center gap-4">
+           {lastSyncTime && (
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-[8px] font-black uppercase text-[#4ea59d]">SMS System Linked</span>
+                <span className="text-[8px] text-slate-500">Last Sync: {lastSyncTime}</span>
+              </div>
+           )}
+           <button 
+             onClick={performSmsSync}
+             className="px-6 py-2.5 bg-[#1f4e4a] border border-[#4ea59d]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4ea59d] transition-all flex items-center gap-2"
+           >
+             <i className={`fa-solid fa-rotate ${isLoading ? 'animate-spin' : ''}`}></i> Sync with SMS
+           </button>
         </div>
       </header>
 
@@ -253,7 +501,6 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Notification Section */}
       <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-2xl relative overflow-hidden">
         <div className="flex items-center justify-between mb-8 relative z-10">
           <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-4">
@@ -297,7 +544,7 @@ const App: React.FC = () => {
             <i className="fa-solid fa-bullhorn text-[#4ea59d]"></i> Notice Board
           </h3>
           <div className="space-y-4">
-            {ANNOUNCEMENTS.map(item => (
+            {dynamicAnnouncements.map(item => (
               <div key={item.id} className="p-6 bg-[#0a1a19] rounded-3xl border border-[#1f4e4a] group hover:border-[#4ea59d] transition-all">
                 <div className="flex justify-between items-center mb-2">
                   <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${
@@ -352,7 +599,7 @@ const App: React.FC = () => {
               <i className="fa-solid fa-bullhorn text-[#4ea59d]"></i> School Announcements
             </h3>
             <div className="space-y-4">
-              {ANNOUNCEMENTS.map(ann => (
+              {dynamicAnnouncements.map(ann => (
                 <div key={ann.id} className="p-6 bg-[#0f2624] rounded-3xl border border-[#1f4e4a] hover:border-[#4ea59d] transition-all group">
                   <div className="flex justify-between items-center mb-3">
                     <span className="bg-[#4ea59d]/10 text-[#4ea59d] px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">{ann.priority} Priority</span>
@@ -419,7 +666,7 @@ const App: React.FC = () => {
                 <i className="fa-solid fa-clipboard-list text-[#4ea59d]"></i> Pending Assignments
               </h3>
               <div className="space-y-4">
-                 {MOCK_ASSIGNMENTS.map(ass => (
+                 {dynamicAssignments.map(ass => (
                    <div key={ass.id} className="p-8 bg-[#0f2624] rounded-[32px] border border-[#1f4e4a] flex flex-col sm:flex-row justify-between items-center gap-6 group">
                       <div className="flex-1">
                          <div className="flex items-center gap-3 mb-2">
@@ -464,7 +711,7 @@ const App: React.FC = () => {
         <section className="bg-[#0f2624] p-10 rounded-[40px] border border-[#1f4e4a] shadow-xl h-fit sticky top-10">
            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8">Exam Schedule</h3>
            <div className="space-y-6">
-              {UPCOMING_EXAMS.map((ex, i) => (
+              {dynamicExams.map((ex, i) => (
                 <div key={i} className="relative pl-6 border-l-2 border-[#4ea59d]/30 group">
                    <div className="absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-[#4ea59d] shadow-[0_0_10px_#4ea59d] group-hover:scale-150 transition-transform"></div>
                    <p className="text-[10px] font-black text-[#4ea59d] uppercase tracking-widest">{ex.date} @ {ex.time}</p>
@@ -510,7 +757,7 @@ const App: React.FC = () => {
         <section className="bg-[#0f2624] p-10 rounded-[40px] border border-[#1f4e4a] shadow-xl">
           <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8">Exam Results</h3>
           <div className="space-y-4">
-             {UPCOMING_EXAMS.map((ex, i) => (
+             {dynamicExams.map((ex, i) => (
                <div key={i} className="p-6 bg-[#0a1a19] rounded-3xl border border-[#1f4e4a] flex justify-between items-center">
                   <div>
                     <h4 className="text-sm font-bold text-white">{ex.subject}</h4>
@@ -537,7 +784,6 @@ const App: React.FC = () => {
         <section className="lg:col-span-2 bg-[#0f2624] p-10 rounded-[40px] border border-[#1f4e4a] shadow-xl">
           <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8">Achievements & Badges</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-             {/* Fix typo: STUDENT_ACHIECHEVEMENTS to STUDENT_ACHIEVEMENTS */}
              {STUDENT_ACHIEVEMENTS.map(ach => (
                <div key={ach.id} className="p-8 bg-[#0a1a19] rounded-[40px] border border-[#1f4e4a] text-center space-y-4 group hover:bg-[#4ea59d]/5 transition-all">
                   <div className={`w-20 h-20 mx-auto rounded-[28px] bg-white/5 flex items-center justify-center text-4xl ${ach.color} group-hover:scale-110 transition-transform`}>
@@ -801,6 +1047,7 @@ const App: React.FC = () => {
       />
       <main className={`flex-1 md:ml-72 p-6 md:p-8 overflow-x-hidden ${isSidebarOpen ? 'hidden md:block' : 'block'}`}>
         {currentView === 'dashboard' && renderDashboard()}
+        {currentView === 'parent-portal' && renderParentPortal()}
         {currentView === 'instruction' && renderInstruction()}
         {currentView === 'activity' && renderActivity()}
         {currentView === 'courses' && renderCourses()}
@@ -811,7 +1058,7 @@ const App: React.FC = () => {
         {currentView === 'timetable' && renderTimetable()}
         {currentView === 'profile' && (
            <div className="space-y-8 animate-fadeIn text-slate-100">
-             <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Student Profile</h2>
+             <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">User Profile</h2>
              <div className="bg-[#0f2624] p-6 md:p-10 rounded-[32px] md:rounded-[40px] border border-[#1f4e4a] max-w-2xl shadow-2xl relative overflow-hidden">
                  <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center relative z-10">
                      <img src={user.avatar} className="w-32 h-32 md:w-40 md:h-40 rounded-[24px] md:rounded-[40px] border-4 border-[#4ea59d] p-1 shadow-2xl object-cover" />
@@ -826,19 +1073,14 @@ const App: React.FC = () => {
                                  <p className="text-xs font-bold text-slate-200">{user.email}</p>
                              </div>
                              <div>
-                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Student ID</p>
-                                 <p className="text-xs font-mono font-bold text-[#4ea59d]">{user.studentId || 'N/A'}</p>
+                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">System Identifier</p>
+                                 <p className="text-xs font-mono font-bold text-[#4ea59d]">{user.studentId || user.childId || 'N/A'}</p>
                              </div>
                          </div>
                      </div>
                  </div>
              </div>
            </div>
-        )}
-        {!['dashboard', 'instruction', 'activity', 'courses', 'course-detail', 'quiz-player', 'profile', 'studies', 'contact', 'timetable'].includes(currentView) && (
-          <div className="flex items-center justify-center h-full text-slate-500 font-bold uppercase tracking-widest italic">
-            Component "{currentView}" coming soon...
-          </div>
         )}
       </main>
       

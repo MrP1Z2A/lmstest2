@@ -13,22 +13,25 @@ interface SidebarProps {
   onToggle?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, userRole, userEmail, userName, isOpen, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, userRole, userName, isOpen, onToggle }) => {
   const handleNavClick = (view: View) => {
     onViewChange(view);
     if (onToggle) onToggle();
   };
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'fa-house' },
-    { id: 'profile', label: 'Student Profile', icon: 'fa-id-card' },
-    { id: 'instruction', label: 'Instruction Page', icon: 'fa-book-open' },
-    { id: 'courses', label: 'Courses', icon: 'fa-graduation-cap' },
-    { id: 'activity', label: 'Activity', icon: 'fa-chart-line' },
-    { id: 'timetable', label: 'Time table / Calendar', icon: 'fa-calendar' },
-    { id: 'studies', label: 'Grades / Achievement', icon: 'fa-trophy' },
-    { id: 'contact', label: 'Messages / Contact', icon: 'fa-comments' },
+    { id: 'dashboard', label: 'Dashboard', icon: 'fa-house', roles: [UserRole.STUDENT, UserRole.TEACHER] },
+    { id: 'parent-portal', label: 'Parent Portal', icon: 'fa-clipboard-user', roles: [UserRole.PARENT] },
+    { id: 'profile', label: 'User Profile', icon: 'fa-id-card', roles: [UserRole.STUDENT, UserRole.TEACHER, UserRole.PARENT] },
+    { id: 'instruction', label: 'Instruction Page', icon: 'fa-book-open', roles: [UserRole.STUDENT, UserRole.TEACHER, UserRole.PARENT] },
+    { id: 'courses', label: 'Courses', icon: 'fa-graduation-cap', roles: [UserRole.STUDENT, UserRole.TEACHER] },
+    { id: 'activity', label: 'Activity', icon: 'fa-chart-line', roles: [UserRole.STUDENT] },
+    { id: 'timetable', label: 'Time table / Calendar', icon: 'fa-calendar', roles: [UserRole.STUDENT, UserRole.TEACHER] },
+    { id: 'studies', label: 'Grades / Achievement', icon: 'fa-trophy', roles: [UserRole.STUDENT] },
+    { id: 'contact', label: 'Messages / Contact', icon: 'fa-comments', roles: [UserRole.STUDENT, UserRole.TEACHER, UserRole.PARENT] },
   ];
+
+  const filteredNavItems = navItems.filter(item => item.roles.includes(userRole));
 
   return (
     <>
@@ -52,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, 
         </div>
 
         <nav className="flex-1 px-4 py-2 space-y-1">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const isActive = currentView === item.id;
             return (
               <button
@@ -84,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, 
             </div>
             <div className="flex-1 overflow-hidden">
               <p className="text-[9px] font-black text-[#4ea59d] uppercase tracking-[0.2em] truncate">{userName || 'Student'}</p>
-              <p className="text-[8px] text-slate-500 truncate">{userEmail}</p>
+              <p className="text-[8px] text-slate-500 truncate">{userRole} Account</p>
             </div>
           </div>
           

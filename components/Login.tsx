@@ -26,14 +26,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleSignIn = () => {
     setError('');
-    if (username === 'parent1' && password === '12345') {
-      window.location.href = 'https://smspa1.vercel.app';
+    // Special Parent Login Logic
+    if (username === 'parent@gmail.com' && password === 'EDU-2026-001') {
+      onLogin(UserRole.PARENT, 'parent@gmail.com');
     } else if (username === 'user1' && password === '123456') {
       onLogin(UserRole.STUDENT, 'alex@edu.com');
     } else if (username === 'teacher1' && password === '123456') {
       onLogin(UserRole.TEACHER, 'sarah@edu.com');
     } else {
-      setError('Invalid credentials. (Hint: user1/123456 or teacher1/123456)');
+      setError('Invalid credentials. (Hint: parent@gmail.com / EDU-2026-001)');
     }
   };
 
@@ -81,7 +82,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="text" 
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. user1"
+                  placeholder="parent@gmail.com"
                   className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 bg-[#f8fafc] shadow-inner outline-none focus:border-[#4ea59d] focus:ring-4 focus:ring-[#4ea59d]/10 transition-all text-base font-semibold text-[#0f2624] placeholder-slate-400"
                 />
               </div>
@@ -94,7 +95,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type={passwordVisible ? 'text' : 'password'} 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="EDU-2026-001"
                   className="w-full pl-12 pr-12 py-3 rounded-2xl border border-slate-200 bg-[#f8fafc] shadow-inner outline-none focus:border-[#4ea59d] focus:ring-4 focus:ring-[#4ea59d]/10 transition-all text-base font-semibold text-[#0f2624] placeholder-slate-400"
                 />
                 <button 
