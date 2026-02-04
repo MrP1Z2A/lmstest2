@@ -101,3 +101,18 @@ export type View =
   | 'studies'
   | 'contact'
   | 'parent-portal';
+
+// ...existing code...
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatar: string;
+  studentId?: string;
+  eduLevel?: string;
+  childId?: string; // parent -> child link
+}
+
+// ...existing code...
