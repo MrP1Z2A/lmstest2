@@ -28,7 +28,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
     // Special Parent Login Logic
     if (username === 'parent@gmail.com' && password === 'EDU-2026-001') {
-      onLogin(UserRole.PARENT, 'parent@gmail.com');
+      window.location.href = 'https://smspa1.vercel.app';
     } else if (username === 'user1' && password === '123456') {
       onLogin(UserRole.STUDENT, 'alex@edu.com');
     } else if (username === 'teacher1' && password === '123456') {
