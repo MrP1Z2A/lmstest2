@@ -5,7 +5,7 @@ import CourseCard from './components/CourseCard';
 import Login from './components/Login';
 import { Course, User, UserRole, View, Note, Quiz, ReportCard } from './types';
 import { INITIAL_USER, INITIAL_COURSES, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS, MOCK_ASSIGNMENTS } from './constants';
-import { summarizeNotes, generateQuizFromNotes } from './services/geminiService';
+import { summarizeNotes, generateQuizFromNotes } from './services/aiService';
 
 const syncSmsData = async (id: string | undefined) => {
   return {

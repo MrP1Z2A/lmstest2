@@ -1,7 +1,7 @@
 
 # EduSphere LMS - Local Setup Guide
 
-EduSphere is a NextGen AI-powered Learning Management System built with React, Vite, Tailwind CSS, and Google Gemini API.
+EduSphere is a NextGen Learning Management System built with React, Vite, and Tailwind CSS.
 
 ## Prerequisites
 
@@ -17,16 +17,9 @@ EduSphere is a NextGen AI-powered Learning Management System built with React, V
     npm install
     ```
 
-## Configuration (AI Features)
+## Configuration
 
-To enable AI Summarization and Quiz Generation, you need a Google Gemini API Key.
-
-1.  Create a new file named `.env` in the project's root folder.
-2.  Add your API key inside the `.env` file like this:
-    ```env
-    API_KEY=your_actual_gemini_api_key_here
-    ```
-    *You can obtain an API key for free from the [Google AI Studio](https://aistudio.google.com/).*
+No external API key is required for summarization and quiz generation.
 
 ## Running Locally
 
@@ -51,4 +44,4 @@ The terminal will provide a link (usually `http://localhost:5173`). Open it in y
 - `constants.tsx`: Mock data and initial configurations.
 - `types.ts`: TypeScript interfaces and enums.
 - `components/`: UI components like Sidebar, CourseCard, and Login.
-- `services/`: AI service integration using `@google/genai`.
+- `services/`: local note summarization and quiz generation utilities.
