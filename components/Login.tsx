@@ -74,12 +74,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       // --------------------
       // ROLE-BASED REDIRECT
       // --------------------
-      if (profile.role === 'parent') {
-        window.location.href = 'https://smspa1.vercel.app';
+      const normalizedRole = String(profile?.role || '').toUpperCase();
+
+      if (normalizedRole === 'PARENT') {
+        onLogin(UserRole.PARENT, data.user.email || email);
         return;
       }
 
-      // Default: STUDENT
+      if (normalizedRole === 'TEACHER') {
+        onLogin(UserRole.TEACHER, data.user.email || email);
+        return;
+      }
+
+      if (normalizedRole === 'ADMIN') {
+        onLogin(UserRole.ADMIN, data.user.email || email);
+        return;
+      }
+
       onLogin(UserRole.STUDENT, data.user.email || email);
     } catch (err: any) {
       setError(err.message || 'Authentication failed');

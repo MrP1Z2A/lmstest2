@@ -29,6 +29,15 @@ npm run dev
 ```
 The terminal will provide a link (usually `http://localhost:5173`). Open it in your browser.
 
+## Netlify + Supabase Setup
+
+To enable authentication in Netlify deployment, add these environment variables in **Site settings → Environment variables**:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Use `.env.example` as the reference for values.
+
 ## Credentials for Testing
 
 - **Student Role**: 
