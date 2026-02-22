@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserRole } from '../types';
-import { supabase } from '../src/supabaseClient';
+import { isSupabaseConfigured, supabase } from '../src/supabaseClient';
 
 interface LoginProps {
   onLogin: (role: UserRole, email: string) => void;
@@ -32,6 +32,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
+      if (!supabase || !isSupabaseConfigured) {
+        throw new Error('Authentication service is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify environment variables.');
+      }
+
       if (isRegister) {
         const { error } = await supabase.auth.signUp({
           email,
@@ -120,6 +124,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <h2 className="text-center text-xl font-black mb-8 text-[#0f2624] uppercase">
             {isRegister ? 'Create Account' : 'Authenticate Account'}
           </h2>
+
+          {!isSupabaseConfigured && (
+            <p className="text-amber-600 text-xs text-center mb-4">
+              Auth backend is not configured for this deployment.
+            </p>
+          )}
 
           <div className="mb-4">
             <input
