@@ -6,7 +6,26 @@ import Login from './components/Login';
 import { Course, User, UserRole, View, Note, Quiz, ReportCard } from './types';
 import { INITIAL_USER, INITIAL_COURSES, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS, MOCK_ASSIGNMENTS } from './constants';
 import { summarizeNotes, generateQuizFromNotes } from './services/geminiService';
-import { syncSmsData } from './services/smsService';
+
+const syncSmsData = async (id: string | undefined) => {
+  return {
+    announcements: ANNOUNCEMENTS,
+    exams: UPCOMING_EXAMS,
+    assignments: MOCK_ASSIGNMENTS,
+    reportCard: {
+      term: 'Q2 2025',
+      gpa: '3.9',
+      rank: '1st',
+      attendance: '98%',
+      subjects: [
+        { name: 'Data Structures', score: 88, grade: 'A', comment: 'Strong performance with excellent problem-solving skills.' },
+        { name: 'Modern Physics', score: 92, grade: 'A+', comment: 'Outstanding grasp of theoretical concepts.' },
+        { name: 'Advanced Calculus', score: 95, grade: 'A+', comment: 'Exceptional mathematical reasoning.' }
+      ]
+    },
+    lastSync: new Date().toLocaleTimeString()
+  };
+};
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
