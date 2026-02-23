@@ -3,7 +3,7 @@ import { UserRole } from '../types';
 import { isSupabaseConfigured, supabase } from '../src/supabaseClient';
 
 interface LoginProps {
-  onLogin: (role: UserRole, email: string) => void;
+  onLogin: (role: Exclude<UserRole, UserRole.PARENT>, email: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -67,17 +67,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         .from('profiles')
         .select('role')
         .eq('id', data.user.id)
-        .single();
+ 
 
       if (profileError) throw profileError;
 
       // --------------------
       // ROLE-BASED REDIRECT
       // --------------------
-      const normalizedRole = String(profile?.role || '').toUpperCase();
+      const normalizedRole = String(profile?.[0]?.role || '').toUpperCase();
 
       if (normalizedRole === 'PARENT') {
-        onLogin(UserRole.PARENT, data.user.email || email);
+        window.location.href = 'https://smspa1.vercel.app/#/login';
         return;
       }
 

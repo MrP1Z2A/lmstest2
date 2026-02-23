@@ -71,13 +71,13 @@ const App: React.FC = () => {
     }
   }, [isLoggedIn, user.role]);
 
-  const handleLogin = (role: UserRole, email: string) => {
+  const handleLogin = (role: Exclude<UserRole, UserRole.PARENT>, email: string) => {
     const newUser = { 
       ...INITIAL_USER, 
       role, 
       email,
-      name: role === UserRole.PARENT ? 'Mrs. Johnson' : INITIAL_USER.name,
-      childId: role === UserRole.PARENT ? 'EDU-2025-001' : undefined
+      name: INITIAL_USER.name,
+      childId: undefined
     };
     setUser(newUser);
     setIsLoggedIn(true);
