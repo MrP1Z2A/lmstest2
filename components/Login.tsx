@@ -76,20 +76,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       // --------------------
       const normalizedRole = String(profile?.[0]?.role || '').toUpperCase();
 
-      if (normalizedRole === 'PARENT') {
+      if (normalizedRole === 'parent') {
         window.location.href = 'https://smspa1.vercel.app/#/login';
         return;
       }
 
-      if (normalizedRole === 'TEACHER') {
+      if (normalizedRole === 'teacher') {
         onLogin(UserRole.TEACHER, data.user.email || email);
         return;
       }
 
-      if (normalizedRole === 'ADMIN') {
-        onLogin(UserRole.ADMIN, data.user.email || email);
-        return;
-      }
 
       onLogin(UserRole.STUDENT, data.user.email || email);
     } catch (err: any) {
