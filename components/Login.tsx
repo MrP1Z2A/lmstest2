@@ -1,103 +1,98 @@
+// Import React and required hooks for local state, lifecycle effects, and DOM refs.
 import React, { useState, useEffect, useRef } from 'react';
+// Import role enum used to route user access after login.
 import { UserRole } from '../types';
+// Import Supabase client and configuration flag for authentication checks.
 import { isSupabaseConfigured, supabase } from '../src/supabaseClient';
 
+// Define props accepted by the Login component.
 interface LoginProps {
+  // Callback used after successful auth for STUDENT or TEACHER roles.
   onLogin: (role: Exclude<UserRole, UserRole.PARENT>, email: string) => void;
 }
 
+// Create a typed functional component and extract onLogin from props.
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [email, setEmail] = useState('');
+  // Track student name typed by the user.
+  const [studentName, setStudentName] = useState('');
+  // Track password typed by the user.
   const [password, setPassword] = useState('');
+  // Toggle password input between hidden and visible modes.
   const [passwordVisible, setPasswordVisible] = useState(false);
+  // Store auth errors and success-like feedback messages.
   const [error, setError] = useState('');
-  const [isRegister, setIsRegister] = useState(false);
+  // Disable actions and show waiting text while auth request is running.
   const [loading, setLoading] = useState(false);
 
+  // Keep a reference to the glow overlay so CSS variables can be updated on mouse move.
   const glowRef = useRef<HTMLDivElement>(null);
 
+  // Register a global mousemove listener once to drive the background glow effect.
   useEffect(() => {
+    // Capture current mouse position from browser events.
     const handleMouseMove = (e: MouseEvent) => {
+      // Only update styles if the glow element is mounted.
       if (glowRef.current) {
+        // Set CSS custom property --x to horizontal cursor position.
         glowRef.current.style.setProperty('--x', `${e.clientX}px`);
+        // Set CSS custom property --y to vertical cursor position.
         glowRef.current.style.setProperty('--y', `${e.clientY}px`);
       }
     };
+    // Attach the listener on mount.
     window.addEventListener('mousemove', handleMouseMove);
+    // Remove the listener on unmount to avoid leaks.
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
+  // Handle both registration and sign-in based on current mode.
   const handleAuth = async () => {
+    // Clear any previous message before new request.
     setError('');
+    // Set loading state so UI can prevent duplicate submissions.
     setLoading(true);
 
     try {
+      // Guard against missing backend configuration.
       if (!supabase || !isSupabaseConfigured) {
-        throw new Error('Authentication service is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify environment variables.');
-      }
-
-      if (isRegister) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-
-        if (error) throw error;
-
-        setError('Account created! Please check your email to verify.');
-        setIsRegister(false);
-        return;
+        throw new Error('Authentication service is not configured. ');
       }
 
       // --------------------
       // SIGN IN
       // --------------------
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Fetch matching student credentials from students table.
+      const { data: student, error: studentError } = await supabase
+        .from('students')
+        .select('name, email, temp_password')
+        .eq('name', studentName)
+        .eq('temp_password', password)
+        .maybeSingle();
 
-      if (error) throw error;
-      if (!data.user) throw new Error('No user returned');
+      // Stop if query fails.
+      if (studentError) throw studentError;
 
-      // --------------------
-      // FETCH ROLE FROM public.profiles
-      // --------------------
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
- 
-
-      if (profileError) throw profileError;
-
-      // --------------------
-      // ROLE-BASED REDIRECT
-      // --------------------
-      const normalizedRole = String(profile?.[0]?.role || '').toUpperCase();
-
-      if (normalizedRole === 'PARENT') {
-        window.location.href = 'https://smspa1.vercel.app/#/login';
-        return;
+      // Reject when no matching student record exists.
+      if (!student) {
+        throw new Error('Invalid name or temporary password');
       }
 
-      if (normalizedRole === 'TEACHER') {
-        onLogin(UserRole.TEACHER, data.user.email || email);
-        return;
-      }
-
-
-
-      onLogin(UserRole.STUDENT, data.user.email || email);
+      // Successful match logs in as student.
+      onLogin(UserRole.STUDENT, student.email || student.name);
     } catch (err: any) {
+      // Display known error message or fallback generic auth error.
       setError(err.message || 'Authentication failed');
     } finally {
+      // Always end loading state after auth attempt completes.
       setLoading(false);
     }
   };
 
+  // Render login/register page UI.
   return (
+    // Full-screen wrapper with centered card and hidden overflow.
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden font-['Segoe_UI',sans-serif]">
+      {/* Background image layer with dark gradient overlay for contrast */}
       <div
         className="fixed inset-0 z-0 bg-cover bg-center"
         style={{
@@ -106,6 +101,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }}
       />
 
+      {/* Mouse-follow glow overlay controlled by CSS variables --x and --y */}
       <div
         ref={glowRef}
         className="fixed inset-0 z-1 pointer-events-none opacity-50"
@@ -115,7 +111,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }}
       />
 
+      {/* Main centered content container */}
       <div className="relative z-10 w-full max-w-[400px] px-6">
+        {/* Brand block with icon, title, and subtitle */}
         <div className="flex flex-col items-center mb-10 text-center">
           <div className="w-20 h-20 bg-[#4ea59d] rounded-[28px] flex items-center justify-center shadow-2xl mb-6">
             <i className="fa-solid fa-graduation-cap text-4xl text-white"></i>
@@ -128,27 +126,32 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </p>
         </div>
 
+        {/* Auth card containing form controls and actions */}
         <div className="bg-white p-8 rounded-[32px] shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
+          {/* Heading updates based on current auth mode */}
           <h2 className="text-center text-xl font-black mb-8 text-[#0f2624] uppercase">
-            {isRegister ? 'Create Account' : 'Authenticate Account'}
+            Authenticate Account
           </h2>
 
+          {/* Show configuration warning when Supabase is unavailable */}
           {!isSupabaseConfigured && (
             <p className="text-amber-600 text-xs text-center mb-4">
               Auth backend is not configured for this deployment.
             </p>
           )}
 
+          {/* Email input field */}
           <div className="mb-4">
             <input
-              type="email"
-              placeholder="email@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              placeholder="Student Name"
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl border bg-[#f8fafc] text-black caret-black"
             />
           </div>
 
+          {/* Password input with visibility toggle button */}
           <div className="mb-4 relative">
             <input
               type={passwordVisible ? 'text' : 'password'}
@@ -157,6 +160,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl border bg-[#f8fafc] text-black caret-black"
             />
+            {/* Toggle password visibility icon */}
             <button
               onClick={() => setPasswordVisible(!passwordVisible)}
               className="absolute right-4 top-1/2 -translate-y-1/2"
@@ -165,29 +169,22 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </button>
           </div>
 
+          {/* Show error or status feedback */}
           {error && (
             <p className="text-red-500 text-xs text-center mb-3">{error}</p>
           )}
 
+          {/* Submit button for both register and sign-in actions */}
           <button
             onClick={handleAuth}
             disabled={loading}
             className="w-full py-4 bg-[#4ea59d] text-white rounded-2xl font-black uppercase"
           >
-            {loading ? 'Please wait...' : isRegister ? 'Register' : 'Sign In'}
+            {loading ? 'Please wait...' : 'Sign In'}
           </button>
-
-          <p className="mt-6 text-center text-[#4ea59d] text-sm">
-            {isRegister ? 'Already have an account?' : 'No account yet?'}{' '}
-            <button
-              onClick={() => setIsRegister(!isRegister)}
-              className="text-[#4ea59d] font-bold"
-            >
-              {isRegister ? 'Sign In' : 'Register'}
-            </button>
-          </p>
         </div>
 
+        {/* Bottom copyright notice */}
         <p className="mt-10 text-center text-white/40 text-[10px] font-bold uppercase tracking-[0.3em]">
           © 2025 EduSphere Global Academy
         </p>
@@ -196,4 +193,5 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   );
 };
 
+// Export component as default for use in app entry flow.
 export default Login;
