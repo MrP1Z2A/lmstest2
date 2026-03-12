@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
-import CourseCard from './components/CourseCard';
 import Login from './components/Login';
+import COURSES from './components/ClassandCoursesmanager';
+import LiveCalendar from './components/Livecalender';
 import { Course, User, UserRole, View, Note, Quiz, ReportCard } from './types';
 import { INITIAL_USER, INITIAL_COURSES, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS, MOCK_ASSIGNMENTS } from './constants';
 import { summarizeNotes, generateQuizFromNotes } from './services/aiService';
+import { supabase, isSupabaseConfigured } from './src/supabaseClient';
 
 const syncSmsData = async (id: string | undefined) => {
   return {
@@ -27,9 +29,42 @@ const syncSmsData = async (id: string | undefined) => {
   };
 };
 
+const getStudentAvatarUrl = (avatarValue?: string | null) => {
+  if (!avatarValue || !supabase) return null;
+  if (/^https?:\/\//i.test(avatarValue)) return avatarValue;
+  const { data } = supabase.storage.from('student_profile').getPublicUrl(avatarValue);
+  return data.publicUrl;
+};
+
+const formatAttendanceRate = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  const stringValue = String(value).trim();
+  if (stringValue.includes('%')) return stringValue;
+  return `${stringValue}%`;
+};
+
+const LOGIN_STORAGE_KEY = 'edusphere_logged_in';
+const USER_STORAGE_KEY = 'edusphere_user';
+
+const getStoredLoginState = () => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(LOGIN_STORAGE_KEY) === 'true';
+};
+
+const getStoredUser = () => {
+  if (typeof window === 'undefined') return INITIAL_USER;
+  try {
+    const rawUser = window.localStorage.getItem(USER_STORAGE_KEY);
+    if (!rawUser) return INITIAL_USER;
+    return { ...INITIAL_USER, ...JSON.parse(rawUser) } as User;
+  } catch {
+    return INITIAL_USER;
+  }
+};
+
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState<User>(INITIAL_USER);
+  const [isLoggedIn, setIsLoggedIn] = useState(getStoredLoginState);
+  const [user, setUser] = useState<User>(getStoredUser);
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -45,8 +80,9 @@ const App: React.FC = () => {
   const [dynamicAssignments, setDynamicAssignments] = useState(MOCK_ASSIGNMENTS);
   const [reportCard, setReportCard] = useState<ReportCard | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [studentAttendanceRate, setStudentAttendanceRate] = useState<string>('98%');
 
-  const performSmsSync = async () => {
+  const performSmsSync = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await syncSmsData(user.studentId || user.childId);
@@ -60,7 +96,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user.studentId, user.childId]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -70,6 +106,62 @@ const App: React.FC = () => {
       }
     }
   }, [isLoggedIn, user.role]);
+
+  const loadStudentProfile = useCallback(async () => {
+    if (!isLoggedIn || !supabase || !isSupabaseConfigured) return;
+
+    const { data: student, error } = await supabase
+      .from('students')
+      .select('id, name, avatar, email, attendanceRate')
+      .or(`email.eq.${user.email},name.eq.${user.email}`)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to load student profile', error.message);
+      return;
+    }
+
+    if (!student) return;
+
+    const avatarUrl = getStudentAvatarUrl(student.avatar);
+    const attendanceRate = formatAttendanceRate(student.attendanceRate);
+
+    setStudentAttendanceRate(attendanceRate);
+
+    setUser(prev => ({
+      ...prev,
+      name: student.name || prev.name,
+      email: student.email || prev.email,
+      studentId: student.id ? String(student.id) : prev.studentId,
+      avatar: avatarUrl || prev.avatar
+    }));
+  }, [isLoggedIn, user.email]);
+
+  useEffect(() => {
+    void loadStudentProfile();
+  }, [loadStudentProfile]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isLoggedIn) {
+      window.localStorage.removeItem(LOGIN_STORAGE_KEY);
+      window.localStorage.removeItem(USER_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(LOGIN_STORAGE_KEY, 'true');
+    window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  }, [isLoggedIn, user]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const refreshInterval = window.setInterval(() => {
+      void performSmsSync();
+      void loadStudentProfile();
+    }, 60000);
+
+    return () => window.clearInterval(refreshInterval);
+  }, [isLoggedIn, performSmsSync, loadStudentProfile]);
 
   const handleLogin = (role: Exclude<UserRole, UserRole.PARENT>, email: string) => {
     const newUser = { 
@@ -85,6 +177,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setUser(INITIAL_USER);
     setSelectedCourse(null);
     setActiveQuiz(null);
     setCurrentView('dashboard');
@@ -144,7 +237,7 @@ const App: React.FC = () => {
                  <i className="fa-solid fa-child-reaching"></i>
                </div>
                <div>
-                  <p className="text-[#4ea59d] font-black text-[10px] uppercase tracking-[0.2em]">Student Record: Alex Johnson</p>
+                  <p className="text-[#4ea59d] font-black text-[10px] uppercase tracking-[0.2em]">Student Record: {user.name}</p>
                   <p className="text-slate-500 text-[9px] font-bold uppercase tracking-widest">{reportCard.term} Academic Session</p>
                </div>
             </div>
@@ -506,7 +599,7 @@ const App: React.FC = () => {
         
         <div className="bg-[#0f2624] p-8 rounded-[32px] border border-[#1f4e4a] flex flex-col justify-center">
           <h3 className="text-[10px] font-black text-[#4ea59d] uppercase tracking-[0.2em]">Attendance</h3>
-          <p className="text-4xl font-black text-white my-2">98%</p>
+          <p className="text-4xl font-black text-white my-2">{studentAttendanceRate}</p>
           <div className="flex items-center gap-2 text-[#4ea59d]/60 text-[10px] font-bold">
             <i className="fa-solid fa-arrow-up"></i>
             <span>2% Improvement</span>
@@ -748,19 +841,17 @@ const App: React.FC = () => {
   );
 
   const renderCourses = () => (
-    <div className="space-y-12 animate-fadeIn text-slate-100 pb-20">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#1f4e4a] pb-8">
-        <div className="space-y-2">
-          <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Academic Catalog</h2>
-          <p className="text-[#4ea59d]/60 font-black text-[10px] uppercase tracking-[0.4em]">Explore available modules</p>
-        </div>
-      </header>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-        {courses.map(course => (
-          <CourseCard key={course.id} course={course} onClick={() => handleCourseClick(course)} />
-        ))}
-      </div>
-    </div>
+    <COURSES
+      notify={(message) => console.log(message)}
+      onOpenCoursePage={({ id }) => {
+        const matchedCourse = courses.find(course => String(course.id) === String(id));
+        if (!matchedCourse) {
+          console.log('Course details page is only available for catalog courses.');
+          return;
+        }
+        handleCourseClick(matchedCourse);
+      }}
+    />
   );
 
   const renderStudies = () => (
@@ -1074,7 +1165,7 @@ const App: React.FC = () => {
         {currentView === 'quiz-player' && renderQuizPlayer()}
         {currentView === 'studies' && renderStudies()}
         {currentView === 'contact' && renderContact()}
-        {currentView === 'timetable' && renderTimetable()}
+        {currentView === 'timetable' && <LiveCalendar />}
         {currentView === 'profile' && (
            <div className="space-y-8 animate-fadeIn text-slate-100">
              <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">User Profile</h2>
@@ -1092,7 +1183,7 @@ const App: React.FC = () => {
                                  <p className="text-xs font-bold text-slate-200">{user.email}</p>
                              </div>
                              <div>
-                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">System Identifier</p>
+                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Student ID</p>
                                  <p className="text-xs font-mono font-bold text-[#4ea59d]">{user.studentId || user.childId || 'N/A'}</p>
                              </div>
                          </div>

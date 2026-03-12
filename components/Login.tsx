@@ -13,8 +13,8 @@ interface LoginProps {
 
 // Create a typed functional component and extract onLogin from props.
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  // Track student name typed by the user.
-  const [studentName, setStudentName] = useState('');
+  // Track name or email typed by the user.
+  const [identifier, setIdentifier] = useState('');
   // Track password typed by the user.
   const [password, setPassword] = useState('');
   // Toggle password input between hidden and visible modes.
@@ -65,7 +65,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const { data: student, error: studentError } = await supabase
         .from('students')
         .select('name, email, temp_password')
-        .eq('name', studentName)
+        .or(`name.eq.${identifier},email.eq.${identifier}`)
         .eq('temp_password', password)
         .maybeSingle();
 
@@ -74,7 +74,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       // Reject when no matching student record exists.
       if (!student) {
-        throw new Error('Invalid name or temporary password');
+        throw new Error('Invalid name/email or temporary password');
       }
 
       // Successful match logs in as student.
@@ -140,13 +140,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </p>
           )}
 
-          {/* Email input field */}
+          {/* Name or email input field */}
           <div className="mb-4">
             <input
               type="text"
-              placeholder="Student Name"
-              value={studentName}
-              onChange={(e) => setStudentName(e.target.value)}
+              placeholder="Name or Email"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl border bg-[#f8fafc] text-black caret-black"
             />
           </div>

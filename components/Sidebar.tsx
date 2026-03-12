@@ -20,15 +20,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, 
   };
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'fa-house', roles: [UserRole.STUDENT, UserRole.TEACHER] },
+    { id: 'dashboard', label: 'Dashboard', icon: 'fa-house', roles: [UserRole.STUDENT] },
     { id: 'parent-portal', label: 'Parent Portal', icon: 'fa-clipboard-user', roles: [UserRole.PARENT] },
-    { id: 'profile', label: 'User Profile', icon: 'fa-id-card', roles: [UserRole.STUDENT, UserRole.TEACHER, UserRole.PARENT] },
-    { id: 'instruction', label: 'Instruction Page', icon: 'fa-book-open', roles: [UserRole.STUDENT, UserRole.TEACHER, UserRole.PARENT] },
-    { id: 'courses', label: 'Courses', icon: 'fa-graduation-cap', roles: [UserRole.STUDENT, UserRole.TEACHER] },
+    { id: 'profile', label: 'User Profile', icon: 'fa-id-card', roles: [UserRole.STUDENT, UserRole.PARENT] },
+    { id: 'instruction', label: 'Instruction Page', icon: 'fa-book-open', roles: [UserRole.STUDENT, UserRole.PARENT] },
+    { id: 'courses', label: 'Courses', icon: 'fa-graduation-cap', roles: [UserRole.STUDENT] },
     { id: 'activity', label: 'Activity', icon: 'fa-chart-line', roles: [UserRole.STUDENT] },
-    { id: 'timetable', label: 'Time table / Calendar', icon: 'fa-calendar', roles: [UserRole.STUDENT, UserRole.TEACHER] },
+    { id: 'timetable', label: 'Time table / Calendar', icon: 'fa-calendar', roles: [UserRole.STUDENT] },
     { id: 'studies', label: 'Grades / Achievement', icon: 'fa-trophy', roles: [UserRole.STUDENT] },
-    { id: 'contact', label: 'Messages / Contact', icon: 'fa-comments', roles: [UserRole.STUDENT, UserRole.TEACHER, UserRole.PARENT] },
+    { id: 'contact', label: 'Messages / Contact', icon: 'fa-comments', roles: [UserRole.STUDENT, UserRole.PARENT] },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(userRole));

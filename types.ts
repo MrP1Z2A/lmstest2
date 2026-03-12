@@ -1,8 +1,6 @@
 
 export enum UserRole {
   STUDENT = 'STUDENT',
-  TEACHER = 'TEACHER',
-  ADMIN = 'ADMIN',
   PARENT = 'PARENT'
 }
 
@@ -93,7 +91,6 @@ export type View =
   | 'marketplace' 
   | 'course-detail' 
   | 'quiz-player' 
-  | 'teacher-panel'
   | 'profile'
   | 'instruction'
   | 'activity'
