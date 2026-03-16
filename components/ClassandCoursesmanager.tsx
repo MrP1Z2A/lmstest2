@@ -50,6 +50,8 @@ interface CoursesProps {
 
 const CLASS_IMAGE_BUCKET = 'class_image';
 const COURSE_PROFILE_BUCKET = 'course_profile';
+const ALLOW_CLASS_CREATION = false;
+const ALLOW_COURSE_CREATION = false;
 const getTodayIsoDate = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -237,6 +239,11 @@ const COURSES: React.FC<CoursesProps> = ({ students = [], allStudents, subjects 
   };
 
   const createOrUpdateClass = async () => {
+    if (!editingClassId && !ALLOW_CLASS_CREATION) {
+      safeNotify('Class creation is disabled.');
+      return;
+    }
+
     if (!className.trim()) {
       safeNotify('Please enter class name.');
       return;
@@ -383,6 +390,12 @@ const COURSES: React.FC<CoursesProps> = ({ students = [], allStudents, subjects 
   }, [contextType, selectedClassId]);
 
   const createClassCourse = async () => {
+    if (!ALLOW_COURSE_CREATION) {
+      setNewCourseError('Course creation is disabled.');
+      safeNotify('Course creation is disabled.');
+      return;
+    }
+
     if (!selectedClassId) {
       setNewCourseError('Select class first.');
       return;
@@ -760,17 +773,21 @@ const COURSES: React.FC<CoursesProps> = ({ students = [], allStudents, subjects 
       <div className="bg-[#0f2624] rounded-[32px] p-6 sm:p-8 border border-[#1f4e4a] shadow-2xl space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">{editingClassId ? 'Edit Class' : 'Create Class'}</h2>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">{editingClassId ? 'Edit Class' : 'Class Profile'}</h2>
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-slate-400 mt-2">
-              {editingClassId ? 'Update class appearance and details' : 'Build a class profile'}
+              {editingClassId ? 'Update class appearance and details' : 'Class creation is disabled'}
             </p>
           </div>
           <button
-            onClick={() => setIsClassFormOpen(prev => !prev)}
-            className="px-4 py-2 rounded-xl bg-[#4ea59d]/10 text-[#4ea59d] border border-[#4ea59d]/30 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+            onClick={() => {
+              if (!editingClassId) return;
+              setIsClassFormOpen(prev => !prev);
+            }}
+            disabled={!editingClassId}
+            className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${editingClassId ? 'bg-[#4ea59d]/10 text-[#4ea59d] border-[#4ea59d]/30' : 'bg-[#1f4e4a]/30 text-slate-500 border-[#1f4e4a] cursor-not-allowed'}`}
           >
             <i className={`fas ${isClassFormOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-            {isClassFormOpen ? 'Hide Form' : 'Create Class'}
+            {isClassFormOpen ? 'Hide Form' : 'Edit Class'}
           </button>
         </div>
 
@@ -849,7 +866,7 @@ const COURSES: React.FC<CoursesProps> = ({ students = [], allStudents, subjects 
 
           {filteredClasses.length === 0 ? (
             <div className="rounded-2xl bg-[#0a1a19] border border-[#1f4e4a] p-6 text-sm text-slate-400">
-              No classes found. Create a class from the form above, or check your Supabase classes data.
+              No classes found. Class creation is disabled, or check your Supabase classes data.
             </div>
           ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -940,20 +957,13 @@ const COURSES: React.FC<CoursesProps> = ({ students = [], allStudents, subjects 
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <button
-              onClick={() => {
-                if (isClassCourseCreating) return;
-                setIsCreateCourseModalOpen(true);
-                setNewCourseName('');
-                setNewCourseImage(null);
-                setNewCourseError(null);
-              }}
-              disabled={isClassCourseCreating}
-              className={`aspect-square rounded-2xl border-2 border-dashed border-[#4ea59d]/40 flex items-center justify-center text-4xl font-black ${isClassCourseCreating ? 'bg-[#4ea59d]/10 text-[#4ea59d]/40 cursor-not-allowed' : 'bg-[#0a1a19] text-[#4ea59d] hover:-translate-y-0.5'} transition-all`}
-              title="Create course"
+            <div
+              className="aspect-square rounded-2xl border-2 border-dashed border-[#1f4e4a] bg-[#0a1a19] text-slate-500 flex flex-col items-center justify-center text-center px-3"
+              title="Course creation disabled"
             >
-              +
-            </button>
+              <span className="text-2xl font-black leading-none">+</span>
+              <span className="mt-2 text-[10px] font-black uppercase tracking-widest">Creation Disabled</span>
+            </div>
 
             {isClassCoursesLoading && (
               <div className="col-span-full px-3 py-2 rounded-xl bg-[#0a1a19] border border-[#1f4e4a] text-xs font-semibold text-slate-400">

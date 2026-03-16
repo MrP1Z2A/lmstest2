@@ -87,6 +87,8 @@ export interface Course {
 
 export type View = 
   | 'dashboard' 
+  | 'notice-board'
+  | 'notice-detail'
   | 'courses' 
   | 'marketplace' 
   | 'course-detail' 

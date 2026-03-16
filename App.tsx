@@ -5,13 +5,95 @@ import Login from './components/Login';
 import COURSES from './components/ClassandCoursesmanager';
 import LiveCalendar from './components/Livecalender';
 import { Course, User, UserRole, View, Note, Quiz, ReportCard } from './types';
-import { INITIAL_USER, INITIAL_COURSES, ANNOUNCEMENTS, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS, MOCK_ASSIGNMENTS } from './constants';
+import { INITIAL_USER, INITIAL_COURSES, SCHOOL_EVENTS, SCHOOL_ACTIVITIES, UPCOMING_EXAMS, DETAILED_GRADES, STUDENT_ACHIEVEMENTS, SCHOOL_HIVE_POSTS, SCHOOL_CONTACTS, MOCK_ASSIGNMENTS } from './constants';
 import { summarizeNotes, generateQuizFromNotes } from './services/aiService';
 import { supabase, isSupabaseConfigured } from './src/supabaseClient';
 
-const syncSmsData = async (id: string | undefined) => {
+type NoticeItem = {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  fileUrl?: string;
+  fileName?: string;
+};
+
+type NoticeBoardRow = {
+  id: string;
+  title: string | null;
+  message: string | null;
+  notice_date: string | null;
+  created_at: string | null;
+  priority: string | null;
+  file_path: string | null;
+  file_name: string | null;
+};
+
+const NOTICE_FILE_BUCKET = import.meta.env.VITE_SUPABASE_NOTICE_BUCKET || 'notice_board';
+
+const formatNoticeDate = (value?: string | null) => {
+  if (!value) return 'N/A';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'N/A';
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+};
+
+const normalizePriority = (value?: string | null): 'Low' | 'Medium' | 'High' | 'Urgent' => {
+  const formatted = (value || '').trim().toLowerCase();
+  if (formatted === 'urgent') return 'Urgent';
+  if (formatted === 'high') return 'High';
+  if (formatted === 'low') return 'Low';
+  if (formatted === 'medium') return 'Medium';
+  return 'Medium';
+};
+
+const getNoticeFileUrl = (filePath?: string | null) => {
+  if (!filePath || !supabase) return undefined;
+  if (/^https?:\/\//i.test(filePath)) return filePath;
+
+  const normalizedPath = filePath.replace(/^\/+/, '');
+
+  if (normalizedPath.startsWith(`${NOTICE_FILE_BUCKET}/`)) {
+    const objectPath = normalizedPath.slice(NOTICE_FILE_BUCKET.length + 1);
+    const { data } = supabase.storage.from(NOTICE_FILE_BUCKET).getPublicUrl(objectPath);
+    return data.publicUrl;
+  }
+
+  const { data } = supabase.storage.from(NOTICE_FILE_BUCKET).getPublicUrl(normalizedPath);
+  return data.publicUrl;
+};
+
+const fetchNoticeBoardData = async (): Promise<NoticeItem[]> => {
+  if (!supabase || !isSupabaseConfigured) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('notice_board')
+    .select('id, title, message, notice_date, created_at, priority, file_path, file_name')
+    .order('notice_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as NoticeBoardRow[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: (row.title || 'Untitled Notice').trim(),
+    content: (row.message || '').trim() || 'No notice details provided.',
+    date: formatNoticeDate(row.notice_date || row.created_at),
+    priority: normalizePriority(row.priority),
+    fileUrl: getNoticeFileUrl(row.file_path),
+    fileName: row.file_name || undefined,
+  }));
+};
+
+const syncSmsData = async () => {
   return {
-    announcements: ANNOUNCEMENTS,
     exams: UPCOMING_EXAMS,
     assignments: MOCK_ASSIGNMENTS,
     reportCard: {
@@ -45,6 +127,7 @@ const formatAttendanceRate = (value?: string | number | null) => {
 
 const LOGIN_STORAGE_KEY = 'edusphere_logged_in';
 const USER_STORAGE_KEY = 'edusphere_user';
+const VIEWED_NOTICES_STORAGE_KEY = 'edusphere_viewed_notice_ids';
 
 const getStoredLoginState = () => {
   if (typeof window === 'undefined') return false;
@@ -62,6 +145,19 @@ const getStoredUser = () => {
   }
 };
 
+const getStoredViewedNoticeIds = () => {
+  if (typeof window === 'undefined') return [] as string[];
+  try {
+    const raw = window.localStorage.getItem(VIEWED_NOTICES_STORAGE_KEY);
+    if (!raw) return [] as string[];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [] as string[];
+    return parsed.filter((value) => typeof value === 'string');
+  } catch {
+    return [] as string[];
+  }
+};
+
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(getStoredLoginState);
   const [user, setUser] = useState<User>(getStoredUser);
@@ -70,33 +166,43 @@ const App: React.FC = () => {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const [noticeOriginView, setNoticeOriginView] = useState<'notice-board' | 'instruction'>('notice-board');
+  const [viewedNoticeIds, setViewedNoticeIds] = useState<string[]>(getStoredViewedNoticeIds);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date(2025, 3, 1));
   const [calendarSubView, setCalendarSubView] = useState<'day' | 'week' | 'month'>('month');
   
   // Dynamic Data States (Linked to SMS)
-  const [dynamicAnnouncements, setDynamicAnnouncements] = useState(ANNOUNCEMENTS);
+  const [dynamicAnnouncements, setDynamicAnnouncements] = useState<NoticeItem[]>([]);
   const [dynamicExams, setDynamicExams] = useState(UPCOMING_EXAMS);
   const [dynamicAssignments, setDynamicAssignments] = useState(MOCK_ASSIGNMENTS);
   const [reportCard, setReportCard] = useState<ReportCard | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [studentAttendanceRate, setStudentAttendanceRate] = useState<string>('98%');
 
+  const hasNewNotices = dynamicAnnouncements.some(notice => !viewedNoticeIds.includes(notice.id));
+
   const performSmsSync = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await syncSmsData(user.studentId || user.childId);
-      setDynamicAnnouncements(data.announcements);
+      const [data, notices] = await Promise.all([
+        syncSmsData(),
+        fetchNoticeBoardData(),
+      ]);
+
+      setDynamicAnnouncements(notices);
       setDynamicExams(data.exams);
       setDynamicAssignments(data.assignments);
       setReportCard(data.reportCard);
       setLastSyncTime(data.lastSync);
     } catch (err) {
       console.error("Sync error");
+      setDynamicAnnouncements([]);
     } finally {
       setIsLoading(false);
     }
-  }, [user.studentId, user.childId]);
+  }, []);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -154,6 +260,18 @@ const App: React.FC = () => {
   }, [isLoggedIn, user]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(VIEWED_NOTICES_STORAGE_KEY, JSON.stringify(viewedNoticeIds));
+  }, [viewedNoticeIds]);
+
+  useEffect(() => {
+    if (currentView !== 'notice-board' || dynamicAnnouncements.length === 0) return;
+
+    const idsToMark = dynamicAnnouncements.map(notice => notice.id);
+    setViewedNoticeIds(prev => Array.from(new Set([...prev, ...idsToMark])));
+  }, [currentView, dynamicAnnouncements]);
+
+  useEffect(() => {
     if (!isLoggedIn) return;
     const refreshInterval = window.setInterval(() => {
       void performSmsSync();
@@ -179,6 +297,7 @@ const App: React.FC = () => {
     setIsLoggedIn(false);
     setUser(INITIAL_USER);
     setSelectedCourse(null);
+    setSelectedNotice(null);
     setActiveQuiz(null);
     setCurrentView('dashboard');
     setIsSidebarOpen(false);
@@ -187,6 +306,12 @@ const App: React.FC = () => {
   const handleCourseClick = (course: Course) => {
     setSelectedCourse(course);
     setCurrentView('course-detail');
+  };
+
+  const handleNoticeOpen = (notice: NoticeItem, origin: 'notice-board' | 'instruction') => {
+    setSelectedNotice(notice);
+    setNoticeOriginView(origin);
+    setCurrentView('notice-detail');
   };
 
   const handleSummarize = async (note: Note) => {
@@ -471,7 +596,6 @@ const App: React.FC = () => {
                       <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-2xl animate-slideIn">
                         <div className="flex justify-between items-start">
                           <h4 className="text-sm font-black text-orange-500 uppercase">Exam: {exams[0].subject}</h4>
-                          <span className="text-[9px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded uppercase">High Priority</span>
                         </div>
                         <p className="text-xs text-slate-400 mt-1"><i className="fa-solid fa-location-dot mr-1"></i> {exams[0].venue}</p>
                       </div>
@@ -652,27 +776,6 @@ const App: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
-          <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8 flex items-center gap-3">
-            <i className="fa-solid fa-bullhorn text-[#4ea59d]"></i> Notice Board
-          </h3>
-          <div className="space-y-4">
-            {dynamicAnnouncements.map(item => (
-              <div key={item.id} className="p-6 bg-[#0a1a19] rounded-3xl border border-[#1f4e4a] group hover:border-[#4ea59d] transition-all">
-                <div className="flex justify-between items-center mb-2">
-                  <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${
-                    item.priority === 'High' ? 'bg-red-500/10 text-red-500' : 
-                    item.priority === 'Medium' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'
-                  }`}>{item.priority} Priority</span>
-                  <span className="text-[9px] font-black text-slate-600 uppercase">{item.date}</span>
-                </div>
-                <h4 className="text-sm font-bold text-white mb-2">{item.title}</h4>
-                <p className="text-xs text-slate-400 line-clamp-2">{item.content}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
           <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8">Recent Grades</h3>
           <div className="space-y-4">
              {DETAILED_GRADES.slice(0, 3).map((item, i) => (
@@ -689,6 +792,129 @@ const App: React.FC = () => {
       </div>
     </div>
   );
+
+  const renderNoticeBoard = () => (
+    <div className="space-y-8 animate-fadeIn text-slate-100 pb-20">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#1f4e4a] pb-6">
+        <div>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white uppercase tracking-tight">Notice Board</h2>
+          <p className="text-[#4ea59d]/60 text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] sm:tracking-[0.35em]">School Broadcasts</p>
+        </div>
+        <button
+          onClick={performSmsSync}
+          className="w-full md:w-auto px-4 sm:px-6 py-2.5 bg-[#1f4e4a] border border-[#4ea59d]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4ea59d] transition-all flex items-center justify-center gap-2"
+        >
+          <i className={`fa-solid fa-rotate ${isLoading ? 'animate-spin' : ''}`}></i> Refresh Notices
+        </button>
+      </header>
+
+      <section className="bg-[#0f2624] p-4 sm:p-6 lg:p-8 rounded-[24px] sm:rounded-[32px] lg:rounded-[40px] border border-[#1f4e4a] shadow-xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          {dynamicAnnouncements.length === 0 && (
+            <div className="p-6 bg-[#0a1a19] rounded-3xl border border-[#1f4e4a] text-center md:col-span-2">
+              <p className="text-sm text-slate-300">No notices available right now.</p>
+            </div>
+          )}
+          {dynamicAnnouncements.map(item => (
+            <button
+              key={item.id}
+              onClick={() => handleNoticeOpen(item, 'notice-board')}
+              className="w-full p-5 sm:p-6 lg:p-8 bg-[#0a1a19] rounded-[24px] sm:rounded-[28px] lg:rounded-[32px] border border-[#1f4e4a] group hover:border-[#4ea59d] transition-all text-left min-h-[180px] sm:min-h-[210px] lg:min-h-[240px]"
+            >
+              <div className="h-full flex flex-col">
+                <div className="flex items-start justify-between gap-3 mb-4 sm:mb-5">
+                  <span className="text-[11px] sm:text-sm font-black text-slate-500 uppercase tracking-wider">{item.date}</span>
+                  <span className={`text-[10px] sm:text-xs font-black px-2.5 sm:px-3 py-1 rounded-xl uppercase tracking-wider ${
+                    item.priority === 'Urgent'
+                      ? 'bg-rose-500/15 text-rose-300'
+                      : item.priority === 'High'
+                        ? 'bg-red-500/10 text-red-400'
+                        : item.priority === 'Low'
+                          ? 'bg-blue-500/10 text-blue-400'
+                          : 'bg-orange-500/10 text-orange-400'
+                  }`}>
+                    {item.priority}
+                  </span>
+                </div>
+
+                <h4 className="text-xl sm:text-2xl lg:text-3xl xl:text-[34px] leading-tight font-black text-white line-clamp-4 mb-5 sm:mb-6">
+                  {item.title}
+                </h4>
+
+                <div className="mt-auto flex items-center justify-between gap-4">
+                  <span className="text-[#4ea59d] text-[10px] sm:text-xs lg:text-sm font-black uppercase tracking-[0.08em] sm:tracking-[0.12em]">
+                    Click to View Full Announcement
+                  </span>
+                  <i className="fa-solid fa-chevron-right text-[#4ea59d] text-xs sm:text-sm group-hover:translate-x-1 transition-transform shrink-0"></i>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderNoticeDetail = () => {
+    if (!selectedNotice) {
+      return (
+        <div className="space-y-8 animate-fadeIn text-slate-100 pb-20">
+          <button
+            onClick={() => setCurrentView(noticeOriginView)}
+            className="text-[#4ea59d] font-black uppercase text-[10px] tracking-widest flex items-center gap-2"
+          >
+            <i className="fa-solid fa-arrow-left"></i> Back
+          </button>
+          <div className="p-8 bg-[#0f2624] rounded-[32px] border border-[#1f4e4a]">
+            <p className="text-sm text-slate-300">Notice not found.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-8 animate-fadeIn text-slate-100 pb-20">
+        <button
+          onClick={() => setCurrentView(noticeOriginView)}
+          className="text-[#4ea59d] font-black uppercase text-[10px] tracking-widest flex items-center gap-2 group"
+        >
+          <i className="fa-solid fa-arrow-left transition-transform group-hover:-translate-x-1"></i> Back to Notices
+        </button>
+
+        <section className="bg-[#0f2624] p-8 rounded-[40px] border border-[#1f4e4a] shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-wider ${
+              selectedNotice.priority === 'Urgent'
+                ? 'bg-rose-500/15 text-rose-300'
+                : selectedNotice.priority === 'High'
+                  ? 'bg-red-500/10 text-red-400'
+                  : selectedNotice.priority === 'Low'
+                    ? 'bg-blue-500/10 text-blue-400'
+                    : 'bg-orange-500/10 text-orange-400'
+            }`}>
+              {selectedNotice.priority}
+            </span>
+            <span className="text-xs font-black text-slate-500 uppercase">{selectedNotice.date}</span>
+          </div>
+
+          <h2 className="text-3xl font-black text-white mb-4">{selectedNotice.title}</h2>
+          <p className="text-base text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedNotice.content}</p>
+
+          {selectedNotice.fileUrl && (
+            <a
+              href={selectedNotice.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 mt-6 text-xs font-black uppercase tracking-wider text-[#4ea59d] hover:underline"
+            >
+              <i className="fa-solid fa-paperclip"></i>
+              {selectedNotice.fileName || 'Open Attachment'}
+            </a>
+          )}
+        </section>
+      </div>
+    );
+  };
 
   const renderInstruction = () => (
     <div className="space-y-12 animate-fadeIn text-slate-100 pb-20">
@@ -707,19 +933,29 @@ const App: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2 space-y-12">
           <section>
-            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8 flex items-center gap-4">
+            <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-8 flex items-center gap-4">
               <i className="fa-solid fa-bullhorn text-[#4ea59d]"></i> School Announcements
             </h3>
             <div className="space-y-4">
-              {dynamicAnnouncements.map(ann => (
-                <div key={ann.id} className="p-6 bg-[#0f2624] rounded-3xl border border-[#1f4e4a] hover:border-[#4ea59d] transition-all group">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="bg-[#4ea59d]/10 text-[#4ea59d] px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">{ann.priority} Priority</span>
-                    <span className="text-[10px] text-slate-600 font-bold uppercase">{ann.date}</span>
-                  </div>
-                  <h4 className="text-base font-bold text-white mb-2">{ann.title}</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">{ann.content}</p>
+              {dynamicAnnouncements.length === 0 && (
+                <div className="p-6 bg-[#0f2624] rounded-3xl border border-[#1f4e4a] text-center">
+                  <p className="text-sm text-slate-300">No school announcements published yet.</p>
                 </div>
+              )}
+              {dynamicAnnouncements.map(ann => (
+                <button
+                  key={ann.id}
+                  onClick={() => handleNoticeOpen(ann, 'instruction')}
+                  className="w-full p-6 bg-[#0f2624] rounded-3xl border border-[#1f4e4a] hover:border-[#4ea59d] transition-all group text-left"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <h4 className="text-xl font-bold text-white truncate">{ann.title}</h4>
+                      <span className="text-xs font-black text-slate-500 uppercase shrink-0">{ann.date}</span>
+                    </div>
+                    <i className="fa-solid fa-chevron-right text-[#4ea59d] text-xs group-hover:translate-x-1 transition-transform shrink-0"></i>
+                  </div>
+                </button>
               ))}
             </div>
           </section>
@@ -1152,11 +1388,14 @@ const App: React.FC = () => {
         userRole={user.role}
         userEmail={user.email}
         userName={user.name}
+        hasNewNotices={hasNewNotices}
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
       <main className={`flex-1 md:ml-72 p-6 md:p-8 overflow-x-hidden ${isSidebarOpen ? 'hidden md:block' : 'block'}`}>
         {currentView === 'dashboard' && renderDashboard()}
+        {currentView === 'notice-board' && renderNoticeBoard()}
+        {currentView === 'notice-detail' && renderNoticeDetail()}
         {currentView === 'parent-portal' && renderParentPortal()}
         {currentView === 'instruction' && renderInstruction()}
         {currentView === 'activity' && renderActivity()}

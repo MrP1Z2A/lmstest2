@@ -7,13 +7,14 @@ interface SidebarProps {
   onViewChange: (view: View) => void;
   onLogout: () => void;
   userRole: UserRole;
+  hasNewNotices?: boolean;
   userEmail?: string;
   userName?: string;
   isOpen?: boolean;
   onToggle?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, userRole, userName, isOpen, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, userRole, hasNewNotices, userName, isOpen, onToggle }) => {
   const handleNavClick = (view: View) => {
     onViewChange(view);
     if (onToggle) onToggle();
@@ -21,6 +22,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, 
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'fa-house', roles: [UserRole.STUDENT] },
+    { id: 'notice-board', label: 'Notice Board', icon: 'fa-bullhorn', roles: [UserRole.STUDENT, UserRole.PARENT] },
     { id: 'parent-portal', label: 'Parent Portal', icon: 'fa-clipboard-user', roles: [UserRole.PARENT] },
     { id: 'profile', label: 'User Profile', icon: 'fa-id-card', roles: [UserRole.STUDENT, UserRole.PARENT] },
     { id: 'instruction', label: 'Instruction Page', icon: 'fa-book-open', roles: [UserRole.STUDENT, UserRole.PARENT] },
@@ -72,9 +74,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, 
                 </div>
                 <span className={`font-black text-[11px] uppercase tracking-wider text-left transition-all ${
                   isActive ? 'text-white' : 'text-slate-300 group-hover:text-[#4ea59d]'
-                }`}>
+                } flex-1`}>
                   {item.label}
                 </span>
+                {item.id === 'notice-board' && hasNewNotices && (
+                  <span className="relative flex h-3 w-3 shrink-0" title="New notices available">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500"></span>
+                  </span>
+                )}
               </button>
             );
           })}
