@@ -1149,7 +1149,7 @@ const COURSES: React.FC<CoursesProps> = ({ students = [], allStudents, subjects 
       </section>
       )}
 
-      {isCreateCourseModalOpen && (
+      {ALLOW_COURSE_CREATION && isCreateCourseModalOpen && (
         <div className="fixed inset-0 z-[230] bg-[#0a1a19]/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-[#0f2624] rounded-3xl border border-[#1f4e4a] shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between gap-4">
